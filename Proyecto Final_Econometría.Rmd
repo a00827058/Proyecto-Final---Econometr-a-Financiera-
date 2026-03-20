@@ -1,0 +1,774 @@
+---
+title: "Proyecto Final_Econometria"
+output: html_document
+date: "2026-03-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+#Proyecto Final 
+
+Después de haber explorado el comportamiento de distintas acciones se seleccionaron las siguientes 12 acciones con las cuales se prentende relizar distintos modelos para poder evaluar su comportamiento de mejor manera y apoyado también de pronosticos realizar mejores estrategias que maximicen el valor del portafolio. Se decidio utilizar la base de datos de Refinitiv con intervalos de una frecuencia de 30 min con un periodo del 15 de marzo de 2025 al 15 de marzo de 2026 ya que es maximo periodo que deja seleccionar la plataforma
+
+Acciones y ETFs seleccionados 
+XOM 
+XLP
+XLE 
+NVDA
+CL
+GLDM
+AGQ
+CVX
+SPY
+KO
+PEP
+TSLA
+
+Estas acciones toman en cuenta el sector consumo, energetico, tecnologico y commodities y fueron las que se estuvieron utilizando a lo largo de las tareas.  
+
+```{r}
+library(readxl)
+```
+
+
+```{r}
+KO <- read_excel("KO.xlsx")
+PEP  <- read_excel("PEP.xlsx")
+XLP  <- read_excel("XLP.xlsx")
+SPY  <- read_excel("SPY.xlsx")
+GLDM <- read_excel("GLDM.xlsx")
+NVDA <- read_excel("NVDA.xlsx")
+XLE  <- read_excel("XLE.xlsx")
+XOM  <- read_excel("XOM.xlsx")
+CVX  <- read_excel("CVX.xlsx")
+CL  <- read_excel("CL.xlsx")
+TSLA  <- read_excel("TSLA.xlsx")
+AGQ  <- read_excel("AGQ.xlsx")
+```
+
+Librerias 
+
+```{r}
+library(dplyr)
+library(corrplot)
+library(tidyverse)
+library(car)
+library(lmtest)
+```
+
+
+Como primer paso dejamos solo las columnas que necesitamos que son la de local date ya que esta engloba la fecha y hora y la columna de precio de cierre. 
+
+
+```{r}
+KO2   <- KO   %>% select(datetime = `Local Date`, KO   = Close)
+PEP2  <- PEP  %>% select(datetime = `Local Date`, PEP  = Close)
+SPY2  <- SPY  %>% select(datetime = `Local Date`, SPY  = Close)
+CL2   <- CL   %>% select(datetime = `Local Date`, CL   = Close)
+XOM2  <- XOM  %>% select(datetime = `Local Date`, XOM  = Close)
+XLP2  <- XLP  %>% select(datetime = `Local Date`, XLP  = Close)
+XLE2  <- XLE  %>% select(datetime = `Local Date`, XLE  = Close)
+NVDA2 <- NVDA %>% select(datetime = `Local Date`, NVDA = Close)
+GLDM2 <- GLDM %>% select(datetime = `Local Date`, GLDM = Close)
+AGQ2  <- AGQ  %>% select(datetime = `Local Date`, AGQ  = Close)
+CVX2  <- CVX  %>% select(datetime = `Local Date`, CVX  = Close)
+TSLA2 <- TSLA %>% select(datetime = `Local Date`, TSLA = Close)
+```
+
+Convertimos la columna datetime al formato POSIXct (fecha-hora real).
+
+```{r}
+KO2$datetime   <- as.POSIXct(KO2$datetime)
+PEP2$datetime  <- as.POSIXct(PEP2$datetime)
+SPY2$datetime  <- as.POSIXct(SPY2$datetime)
+CL2$datetime   <- as.POSIXct(CL2$datetime)
+XOM2$datetime  <- as.POSIXct(XOM2$datetime)
+XLP2$datetime  <- as.POSIXct(XLP2$datetime)
+XLE2$datetime  <- as.POSIXct(XLE2$datetime)
+NVDA2$datetime <- as.POSIXct(NVDA2$datetime)
+GLDM2$datetime <- as.POSIXct(GLDM2$datetime)
+AGQ2$datetime  <- as.POSIXct(AGQ2$datetime)
+CVX2$datetime  <- as.POSIXct(CVX2$datetime)
+TSLA2$datetime <- as.POSIXct(TSLA2$datetime)
+```
+
+Unimos todas las variables independientes en un solo dataframe
+
+```{r}
+df_prices <- KO2   %>%
+  inner_join(PEP2,  by = "datetime") %>%
+  inner_join(SPY2,  by = "datetime") %>%
+  inner_join(CL2,   by = "datetime") %>%
+  inner_join(XOM2,  by = "datetime") %>%
+  inner_join(XLP2,  by = "datetime") %>%
+  inner_join(XLE2,  by = "datetime") %>%
+  inner_join(NVDA2, by = "datetime") %>%
+  inner_join(GLDM2, by = "datetime") %>%
+  inner_join(AGQ2,  by = "datetime") %>%
+  inner_join(CVX2,  by = "datetime") %>%
+  inner_join(TSLA2, by = "datetime")
+```
+
+Convertimos los precios en rendimientos logaritmicos 
+
+```{r}
+df_ret <- df_prices
+ 
+df_ret$r_KO   <- log(df_ret$KO)   - log(dplyr::lag(df_ret$KO))
+df_ret$r_PEP  <- log(df_ret$PEP)  - log(dplyr::lag(df_ret$PEP))
+df_ret$r_SPY  <- log(df_ret$SPY)  - log(dplyr::lag(df_ret$SPY))
+df_ret$r_CL   <- log(df_ret$CL)   - log(dplyr::lag(df_ret$CL))
+df_ret$r_XOM  <- log(df_ret$XOM)  - log(dplyr::lag(df_ret$XOM))
+df_ret$r_XLP  <- log(df_ret$XLP)  - log(dplyr::lag(df_ret$XLP))
+df_ret$r_XLE  <- log(df_ret$XLE)  - log(dplyr::lag(df_ret$XLE))
+df_ret$r_NVDA <- log(df_ret$NVDA) - log(dplyr::lag(df_ret$NVDA))
+df_ret$r_GLDM <- log(df_ret$GLDM) - log(dplyr::lag(df_ret$GLDM))
+df_ret$r_AGQ  <- log(df_ret$AGQ)  - log(dplyr::lag(df_ret$AGQ))
+df_ret$r_CVX  <- log(df_ret$CVX)  - log(dplyr::lag(df_ret$CVX))
+df_ret$r_TSLA <- log(df_ret$TSLA) - log(dplyr::lag(df_ret$TSLA))
+```
+
+```{r}
+df_ret <- na.omit(df_ret)
+```
+
+Utlizamos el na.omit para eliminar celdas vacias 
+
+Construimos la correlación 
+
+```{r}
+ret_cols <- df_ret %>%
+  select(r_KO, r_PEP, r_SPY, r_CL, r_XOM,
+         r_XLP, r_XLE, r_NVDA, r_GLDM, r_AGQ,
+         r_CVX, r_TSLA) %>%
+  na.omit()
+```
+
+Calcular matriz de correlación
+
+```{r}
+correlacion <- cor(ret_cols)
+```
+
+```{r}
+print(round(correlacion, 2))
+```
+
+Gráfica 
+
+```{r}
+corrplot(correlacion,
+         method      = "color",
+         type        = "upper",
+         addCoef.col = "black",
+         number.cex  = 0.7,
+         tl.col      = "black",
+         tl.srt      = 45,
+         col         = colorRampPalette(c("#2166AC","white","#D6604D"))(200),
+         title       = "Correlación de Retornos Log — Portafolio",
+         mar         = c(0,0,2,0))
+```
+Con base en el análisis de correlación de retornos logarítmicos a intervalos de 30 minutos para el periodo del 15 de marzo de 2025 al 15 de marzo de 2026, se decidió excluir los activos AGQ (ProShares Ultra Silver) y XOM (Exxon Mobil) del modelo. En el caso de AGQ, se observó una correlación de 0.77 con GLDM (World Gold ETF), el valor más alto de toda la matriz, lo que indica que ambos instrumentos capturan esencialmente el mismo comportamiento del mercado de metales preciosos; mantener ambos introduciría redundancia en el modelo sin aportar información adicional. En cuanto a XOM, presentó una correlación de 0.65 con XLE (Energy Select Sector ETF) y de 0.47 con CVX (Chevron Corp.), lo cual es esperado dado que XLE es un ETF sectorial que contiene a XOM dentro de su composición, por lo que su comportamiento ya queda representado por XLE.
+
+
+Al eliminar estos dos activos, el portafolio final queda de 10 acciones — KO, PEP, SPY, CL, XLP, XLE, NVDA, GLDM, CVX y TSLA — este mantiene una diversificación adecuada entre sectores, con correlaciones predominantemente bajas, lo que fortalece la validez estadística de los modelos de regresión que se realizaran a continuación. 
+
+#Modelos de Regresión lineal simple
+
+Para los modelos se decidio seleccionar SPY como variable dependiente ya que este es el ETF que replica al S&P 500, es decir, representa el comportamiento del mercado en general. En una regresión lineal simple el objetivo es explicar cómo se mueve una acción en función de otra, y SPY es el benchmark mas utilizado. 
+
+Para las independientes serían los 9 tickers restantes 
+
+```{r}
+independientes <- c("r_KO", "r_PEP", "r_CL", "r_XLP",
+                    "r_XLE", "r_NVDA", "r_GLDM", "r_CVX", "r_TSLA")
+```
+
+```{r}
+df_modelo <- df_ret %>%
+  select(r_SPY, r_KO, r_PEP, r_CL, r_XLP,
+         r_XLE, r_NVDA, r_GLDM, r_CVX, r_TSLA) %>%
+  na.omit()
+```
+
+```{r}
+SPY ~ KO
+reg_KO <- lm(r_SPY ~ r_KO, data = df_modelo)
+summary(reg_KO)
+```
+SPY ~ KO (R2= 0.0027, Beta= -0.0411, p= 0.0017)
+Coca-Cola explica solo el 0.27% de la variación de SPY, con un beta negativo de -0.0411, lo que indica una ligera relación inversa. Esto tiene sentido ya que KO es un activo defensivo que tiende a comportarse diferente al mercado en momentos de volatilidad.
+
+```{r}
+SPY ~ PEP
+reg_PEP <- lm(r_SPY ~ r_PEP, data = df_modelo)
+summary(reg_PEP)
+```
+SPY ~ PEP (R2= 0.0000, Beta= 0.0002, p= 0.9832)
+PepsiCo es la variable con menor poder explicativo de todas, con un R2 de 0.00% y un p-valor de 0.9832, lo que significa que prácticamente no existe relación lineal entre PEP y SPY. PepsiCo es el activo más independiente del mercado en este portafolio.
+
+```{r}
+SPY ~ CL
+reg_CL <- lm(r_SPY ~ r_CL, data = df_modelo)
+summary(reg_CL)
+```
+SPY ~ CL (R2= 0.0003, Beta= -0.0065, p= 0.2776)
+Colgate-Palmolive no tiene ningún poder explicativo sobre SPY, con un R2 de apenas 0.03% y un p-valor de 0.2776, lo que indica que la relación no es estadísticamente significativa. CL se comporta de forma completamente independiente al mercado.
+
+```{r}
+SPY ~ XLP
+reg_XLP <- lm(r_SPY ~ r_XLP, data = df_modelo)
+summary(reg_XLP)
+```
+SPY ~ XLP (R2= 0.0013, Beta= 0.0201, p= 0.0268)
+El ETF de consumo básico explica el 0.13% de los retornos de SPY, con una relación positiva pero prácticamente nula. Es el modelo menos potente junto con PEP, aunque sigue siendo marginalmente significativo con p= 0.0268.
+
+```{r}
+SPY ~ XLE
+reg_XLE <- lm(r_SPY ~ r_XLE, data = df_modelo)
+summary(reg_XLE)
+```
+SPY ~ XLE (R2= 0.0260, Beta= 0.1086, p= 0.0000)
+El sector energético explica el 2.60% de la variación de SPY. Aunque la correlación entre ambos era la más alta de la matriz (0.56), en la regresión el poder explicativo es bajo, sugiriendo que la relación no es completamente lineal.
+
+```{r}
+SPY ~ NVDA
+reg_NVDA <- lm(r_SPY ~ r_NVDA, data = df_modelo)
+summary(reg_NVDA)
+```
+
+SPY ~ NVDA (R2= 0.3087, Beta= 0.2157, p= 0.0000)
+NVDA es la variable que mejor explica el comportamiento de SPY, con un R2 de 0.3087, lo que significa que el 30.87% de la variación en los retornos del S&P 500 es explicada por NVIDIA. Por cada 1% que sube NVDA, SPY sube 0.2157%, siendo esta relación altamente significativa.
+
+```{r}
+SPY ~ GLDM
+reg_GLDM <- lm(r_SPY ~ r_GLDM, data = df_modelo)
+summary(reg_GLDM)
+```
+SPY ~ GLDM (R²= 0.0362, Beta= 0.1044, p= 0.0000)
+El oro explica apenas el 3.62% de la variación de SPY, lo que era esperado dado que los metales preciosos tienden a moverse de forma opuesta o independiente al mercado accionario. La relación es significativa pero débil.
+
+```{r}
+SPY ~ CVX
+reg_CVX <- lm(r_SPY ~ r_CVX, data = df_modelo)
+summary(reg_CVX)
+```
+SPY ~ CVX (R²= 0.0095, Beta= 0.0495, p= 0.0000)
+Chevron explica apenas el 0.95% de los retornos de SPY. A pesar de ser estadísticamente significativa, la relación es muy débil, lo que indica que los movimientos de CVX tienen poca influencia directa sobre el mercado general.
+
+```{r}
+SPY ~ TSLA
+reg_TSLA <- lm(r_SPY ~ r_TSLA, data = df_modelo)
+summary(reg_TSLA)
+```
+SPY ~ TSLA (R2= 0.0709, Beta= 0.0486, p= 0.0000)
+Tesla explica el 7.09% de la variación en los retornos de SPY, con un beta de 0.0486. Aunque la relación es estadísticamente significativa, su poder explicativo es moderado, lo que confirma el comportamiento más independiente de TSLA respecto al mercado general.
+
+```{r}
+resumen <- data.frame(
+  Variable = independientes,
+  R2       = sapply(independientes, function(x)
+               summary(lm(as.formula(paste("r_SPY ~", x)),
+                          data = df_modelo))$r.squared),
+  R2_adj   = sapply(independientes, function(x)
+               summary(lm(as.formula(paste("r_SPY ~", x)),
+                          data = df_modelo))$adj.r.squared),
+  Beta     = sapply(independientes, function(x)
+               coef(lm(as.formula(paste("r_SPY ~", x)),
+                       data = df_modelo))[[2]]),
+  P_valor  = sapply(independientes, function(x)
+               summary(lm(as.formula(paste("r_SPY ~", x)),
+                          data = df_modelo))$coefficients[2,4]),
+  stringsAsFactors = FALSE
+)
+
+resumen <- resumen[order(-resumen$R2), ]
+print(round(resumen[, -1], 4))
+```
+Realizamos una gráfica para cada regresión 
+
+```{r}
+par(mfrow = c(3, 3), mar = c(4, 4, 3, 1))
+ 
+for (var in independientes) {
+  plot(df_modelo[[var]], df_modelo$r_SPY,
+       pch  = 16, cex = 0.4,
+       col  = adjustcolor("steelblue", alpha.f = 0.4),
+       xlab = var,
+       ylab = "r_SPY",
+       main = paste("SPY ~", var))
+  abline(lm(as.formula(paste("r_SPY ~", var)), data = df_modelo),
+         col = "red", lwd = 2)
+}
+ 
+par(mfrow = c(1,1))
+```
+Las nueve gráficas de dispersión muestran visualmente el poder explicativo de cada variable independiente sobre los retornos de SPY. Se puede observar claramente que NVDA y TSLA son las únicas variables donde la línea de regresión tiene una pendiente perceptible, consistente con sus R2 de 0.3087 y 0.0709 respectivamente, lo que indica que existe una relación lineal positiva real entre estos activos y el mercado general. En contraste, variables como KO, PEP, CL y XLP muestran una línea de regresión prácticamente horizontal, con nubes de puntos completamente dispersas sin ningún patrón definido, lo que es coherente con sus R² cercanos a cero y confirma que estos activos defensivos se mueven de forma independiente al S&P 500. En términos generales, el portafolio está bien diversificado ya que la mayoría de sus componentes no siguen de manera lineal al mercado, siendo NVDA la excepción más notable con el mayor poder explicativo de manera individual.
+
+
+#Modelo Regresión Lineal Múltiple 
+
+```{r}
+reg_multiple <- lm(r_SPY ~ r_KO + r_PEP + r_CL + r_XLP + r_XLE + r_NVDA + r_GLDM + r_CVX + r_TSLA, data = df_modelo)
+summary(reg_multiple)
+```
+El modelo de regresión múltiple es estadísticamente significativo en su conjunto (F= 238.5, p< 2.2e-16), lo que indica que las 9 variables juntas explican de forma real el comportamiento de SPY. El R2 de 0.3669 significa que el modelo explica el 36.69% de la variación en los retornos del S&P 500, lo cual es un resultado bueno tomando en cuenta que son datos intradiarios de 30 minutos.
+
+Ahora lo realizamos solo con las significativas para ver que tanto se ajusta el R2
+
+```{r}
+reg_significativo <- lm(r_SPY ~ r_NVDA + r_TSLA + r_GLDM + r_XLE + r_PEP + r_XLP, 
+                   data = df_modelo)
+summary(reg_significativo)
+```
+
+Al eliminar KO, CL y CVX, el R2 prácticamente no cambió (0.3667 vs 0.3669), pero el R2 ajustado mejoró de 0.3654 a 0.3657 y el F-statistic subió de 238.5 a 357.8, lo que confirma que el modelo reducido es más eficiente ya que explica casi lo mismo con menos variables.
+
+
+#Detección de Errores 
+
+#Detección de Multicolinealidad 
+
+```{r}
+vif(reg_multiple)
+```
+
+Todos los valores están entre 1.05 y 1.90, muy por debajo del umbral de 5. Esto significa que no existe multicolinealidad en el modelo ya que ninguna variable independiente está siendo explicada por las demás. El valor más alto es CVX con 1.90 y XLE con 1.84, lo cual tiene sentido por su relación en el sector energético, pero aún así está muy lejos de ser problemático. 
+
+#Pruebas de Heterocedasticidad Regresión Múltiple Modelo
+
+```{r}
+residuales_reg_multiple <- reg_multiple$residuals    
+```
+
+Calculamos los residuales para el modelo 
+
+```{r}
+observacionesreg_multiple <- c(residuals(reg_multiple))
+plot(observacionesreg_multiple)
+```
+
+La gráfica muestra el comportamiento de los residuales a lo largo del modelo. Los residuales se distribuyen de forma aleatoria alrededor de cero, sin mostrar ningún patrón sistemático o tendencia a lo largo del tiempo, lo que es exactamente lo que se espera en un modelo de regresión  especificado. La gran mayoría de los residuales se concentran en un rango muy estrecho entre -0.01 y 0.01, lo que indica que el modelo ajusta bien la mayor parte del tiempo. Sin embargo, se observan algunos valores atípicos (outliers)
+
+```{r}
+cuadres_reg_multiple <- observacionesreg_multiple^2
+```
+
+```{r}
+plot(reg_multiple$fitted.values,
+     reg_multiple$model$r_SPY,
+     main = "SPY Real vs SPY Estimado",
+     xlab = "SPY Estimado",
+     ylab = "SPY Real")
+abline(0, 1, col = "red")
+```
+La gráfica muestra una relación positiva clara entre los valores estimados por el modelo y los valores reales de SPY. La línea roja tiene pendiente positiva y la nube de puntos sigue esa dirección, lo que confirma que el modelo captura correctamente el sentido de los movimientos del mercado. La concentración de puntos alrededor del centro cerca de 0 es consistente con datos intradiarios de 30 minutos donde la mayoría de los retornos son pequeños.
+
+
+```{r}
+bptest(reg_multiple)
+```
+Con un BP = 2.187 y p-valor = 0.9882, no se rechaza la hipótesis nula. Esto significa que la varianza de los residuales es constante y homogénea a lo largo de todas las observaciones, lo que implica que uno de los supuestos más importantes de la regresión lineal se cumple perfectamente. 
+
+```{r}
+gqtest(reg_multiple, order.by = ~ r_SPY, data = df_modelo)
+```
+
+Con un GQ = 1.0654 y p-valor = 0.0867, no se rechaza la hipótesis nula al nivel de significancia del 5%. Esto confirma que no existe heterocedasticidad en el modelo ya que la varianza de los errores es estable tanto para retornos pequeños como para retornos grandes de SPY. El p-valor de 0.0867 está por encima del0.05, aunque es relativamente cercano, lo que sugiere una ligera tendencia a que la varianza aumente del segmento 1 al 2, pero no lo suficiente como para ser estadísticamente significativa.
+
+Este resultado es consistente con el Breusch-Pagan (p= 0.9882) y confirma que el supuesto de homocedasticidad se cumple en el modelo, validando la confiabilidad de los coeficientes estimados.
+
+#Detección de autocorrelación 
+
+```{r}
+dwtest(reg_multiple)
+```
+El estadístico DW cercano a 2 indica ausencia de autocorrelación positiva. Un valor de 2.4426 sugiere una ligera autocorrelación negativa (valores entre 2 y 4 apuntan en esa dirección), pero con p-valor = 1 no se rechaza la hipótesis nula. De acuerdo con esta prueba, no hay autocorrelación significativa en el modelo.
+
+```{r}
+bgtest(reg_multiple, order = 5)
+```
+Aquí el resultado es opuesto y más preocupante — con un p-valor prácticamente cero, sí se detecta autocorrelación serial hasta el orden 5. Esto significa que los residuales del periodo actual están correlacionados con los de los 5 periodos anteriores.
+
+```{r}
+acf(observacionesreg_multiple, 
+    main = "ACF de Residuales — Autocorrelación",
+    lag.max = 40)
+```
+Existe autocorrelación de orden 1 en los residuales del modelo, lo cual es muy común en datos financieros intradiarios de 30 minutos — los retornos de un periodo están relacionados con el periodo inmediatamente anterior
+
+
+#Data Panel 
+
+Para la construcción de este data panel se tomo en cuenta los reportes trimestrales de las empresas: KO, AAPLE,NVDA y WMT al tener su información disponible con un periodo del Q1 20216 al Q1 2026. Usando los datos de Revenue, EBITDA y Net Debt de cada empresa. 
+
+librerías necesarias
+
+```{r}
+library(readxl)
+library(tidyverse)
+library(plm)
+library(plm)
+```
+
+```{r}
+data_panel <- read_excel("/cloud/project/data_panel.xlsx")
+data_panel$revenue  <- as.numeric(data_panel$revenue)
+data_panel$ebitda   <- as.numeric(data_panel$ebitda)
+data_panel$net_debt <- as.numeric(data_panel$net_debt)
+```
+
+
+```{r}
+data_panel$revenue  <- as.numeric(data_panel$revenue)
+data_panel$ebitda   <- as.numeric(data_panel$ebitda)
+data_panel$net_debt <- as.numeric(data_panel$net_debt)
+
+panel_df <- pdata.frame(data_panel, index = c("ticker", "trimestre"))
+
+modelo_fe <- plm(revenue ~ ebitda + net_debt,
+                 data  = panel_df,
+                 model = "within")
+summary(modelo_fe)
+```
+El modelo es altamente significativo (F= 172.8, p< 2.22e-16) con un R2 de 0.7161, lo que significa que EBITDA y Net Debt explican el 71.6% de la variación en los ingresos de las 4 empresas — un ajuste excelente para un modelo de panel.
+
+EBITDA (Beta= 1.924, p< 2.2e-16): es la variable más importante. Por cada millón de dólares que aumenta el EBITDA, el Revenue aumenta 1.92 millones, lo cual tiene todo el sentido económico ya que empresas más rentables operativamente generan más ingresos.
+
+Net Debt (Beta= 0.121, p= 0.0008): también significativa. Por cada millón que aumenta la deuda neta, el Revenue sube 0.12 millones, sugiriendo que las empresas usan deuda para financiar crecimiento en ventas.
+
+
+#Test de Hausman:
+
+
+```{r}
+modelo_re <- plm(revenue ~ ebitda + net_debt,
+                 data  = panel_df,
+                 model = "random")
+summary(modelo_re)
+
+phtest(modelo_fe, modelo_re)
+```
+
+Modelo de Efectos Aleatorios
+
+El modelo de efectos aleatorios también es altamente significativo (Chi2= 333.6, p< 2.22e-16) con un R2 de 0.7046, prácticamente igual al modelo de efectos fijos (0.7161). Ambas variables siguen siendo significativas con coeficientes muy similares — EBITDA con Beta= 1.926 y Net Debt con Beta= 0.124, confirmando la robustez del modelo. También debemos considerar el theta= 0.958, que es muy cercano a 1, lo que indica que la varianza entre empresas (individual= 0.941) domina sobre la varianza dentro de cada empresa (idiosincrática= 0.059). Esto significa que las diferencias entre NVDA, KO, WMT y AAPL son mucho más importantes que las variaciones dentro de cada empresa a lo largo del tiempo.
+
+Test de Hausman
+
+Con chi2= 0.21049 y p-valor= 0.9001, no se rechaza la hipótesis nula. Esto significa que se debe usar el modelo de efectos aleatorios, ya que ambos modelos son consistentes pero el de efectos aleatorios es más eficiente. En términos prácticos, las diferencias entre empresas no están correlacionadas con las variables explicativas del modelo.
+
+Prueba F 
+
+```{r}
+pFtest(modelo_fe, lm(revenue ~ ebitda + net_debt, data = data_panel))
+```
+Test de Breusch-Pagan 
+
+```{r}
+plmtest(modelo_re, type = "bp")
+```
+
+Test de autocorrelación en el panel
+
+```{r}
+pbgtest(modelo_re)
+```
+Estos tres tests en conjunto confirman que el modelo de data panel con efectos aleatorios está correctamente especificado y es estadísticamente válido. La prueba F (F= 1310.5, p< 2.2e-16) demuestra que las diferencias entre NVDA, KO, WMT y AAPL son altamente significativas, lo que justifica el uso de un modelo de panel en lugar de una regresión simple. El test de Breusch-Pagan (chi2= 1328.4, p< 2.2e-16) confirma que los efectos aleatorios son necesarios y relevantes, validando la decisión del test de Hausman de preferir este modelo sobre el de efectos fijos.
+
+Finalmente, el test de Breusch-Godfrey/Wooldridge (chi²= 103.85, p= 5.37e-09) detecta autocorrelación serial en los errores, lo cual es un comportamiento esperado en datos financieros trimestrales donde los ingresos de un periodo están naturalmente relacionados con los del periodo anterior. En conjunto, el modelo revenue ~ ebitda + net debt con efectos aleatorios es robusto, bien especificado y explica el 70.5% de la variación en los ingresos trimestrales de las cuatro empresas, siendo el EBITDA el determinante más importante del Revenue con un coeficiente de 1.926.
+
+
+#Forecast Series de tiempo 
+
+Series de Tiempo - ARIMA + Forecast 
+
+Acción seleccionada: SPY (S&P 500 ETF)
+Datos: precios de cierre intervalo 30 min 
+Pronostico: al rededor de 1 mes 
+
+Instalamos los paquetes de forecast y tseries
+
+Librerías necesarias 
+
+```{r}
+library(tidyverse)
+library(forecast)
+library(tseries)
+```
+
+Extraemos la serie de precios de SPY que necesitamos
+
+```{r}
+spy_precios <- df_prices %>%
+  select(datetime, SPY) %>%
+  na.omit() %>%
+  arrange(datetime)
+```
+
+Convertir a objeto ts 
+
+```{r}
+spy_ts <- ts(spy_precios$SPY, frequency = 13)  # 13 periodos por día
+```
+
+Graficamos sere original 
+
+```{r}
+autoplot(spy_ts) +
+  labs(title = "Precio de Cierre SPY (30 min)",
+       x = "Tiempo", y = "Precio (USD)") +
+  theme_minimal()
+```
+
+Prueba de estacionariedad
+
+```{r}
+cat("\n--- TEST ADF (Augmented Dickey-Fuller) ---\n")
+adf.test(spy_precios$SPY)
+ 
+cat("\n--- TEST KPSS ---\n")
+kpss.test(spy_precios$SPY)
+```
+
+ADF (p-valor = 0.245): como p-valor > 0.05, la serie de precios de SPY NO es estacionaria — tiene tendencia y su media cambia con el tiempo. Hay que diferenciarla.
+
+KPSS (p-valor = 0.01): como p-valor < 0.05, confirma lo mismo — la serie NO es estacionaria.
+
+
+```{r}
+spy_diff <- diff(spy_precios$SPY)
+```
+
+```{r}
+cat("\n--- Test ASF despues de diferenciar ---\n")
+adf.test(spy_diff)
+```
+Graficamos serie diferenciada 
+```{r}
+autoplot(ts(spy_diff)) +
+  labs(title = "SPY — Primera Diferencia (Retornos)",
+       x = "Tiempo", y = "Diferencia") +
+  theme_minimal()
+```
+
+ACF y PACF para identificar orden ARIMA
+
+```{r}
+par(mfrow = c(1, 2))
+acf(spy_diff,  lag.max = 40, main = "ACF — SPY diferenciado")
+pacf(spy_diff, lag.max = 40, main = "PACF — SPY diferenciado")
+par(mfrow = c(1, 1))
+```
+ACF: todas las barras están dentro de las bandas azules desde el lag 1 en adelante, lo que indica que después de diferenciar la serie no hay autocorrelación significativa. Esto sugiere que la parte MA del modelo es de orden bajo, posiblemente MA(0) o MA(1).
+PACF: hay varias barras que salen de las bandas azules en múltiples lags, lo que indica que hay correlación parcial significativa en varios rezagos. Esto sugiere que la parte AR del modelo podría necesitar algunos rezagos.
+
+
+Modelo Arima Automatico 
+
+```{r}
+cat("\n--- AJUSTANDO MODELO ARIMA AUTOMÁTICO ---\n")
+modelo_arima <- auto.arima(spy_precios$SPY,
+                           seasonal    = FALSE,
+                           stepwise    = FALSE,
+                           approximation = FALSE,
+                           trace       = TRUE)
+ 
+cat("\n--- MODELO SELECCIONADO ---\n")
+summary(modelo_arima)
+```
+AR(3): el precio actual de SPY depende de los 3 periodos anteriores de 30 minutos
+I(1): se diferenció una vez para hacer la serie estacionaria — confirma lo que encontramos con ADF y KPSS
+MA(2): el modelo también considera los errores de predicción de los 2 periodos anteriores
+
+Todos los coeficientes AR y MA son relevantes y sus errores estándar son pequeños relativos al coeficiente, lo que indica que están bien estimados. La combinación de ar1=-1.1267 y ma1=1.0253 casi opuestos es típica en series financieras y refleja la naturaleza de casi-ruido-blanco que vimos en el ACF.
+
+En conclusión el modelo ARIMA(3,1,2) ajusta muy bien los precios de SPY con un error porcentual menor al 0.1%
+
+Diagnostico del modelo 
+
+```{r}
+par(mfrow = c(1, 1))
+checkresiduals(modelo_arima)
+```
+Residuales: se distribuyen aleatoriamente alrededor de cero a lo largo de las 4,221 observaciones, sin ningún patrón sistemático. Se observan algunos valores atípicos puntuales  que corresponden a momentos de alta volatilidad del mercado, pero son pocos y no afectan el modelo.
+
+ACF de residuales: la mayoría de las barras están dentro de las bandas azules, aunque hay una barra significativa cerca del lag 32 que sale por debajo. Esto indica que el modelo captura bien la autocorrelación en general, con una ligera estructura residual en rezagos altos que es prácticamente irrelevante para el forecast de corto plazo.
+
+Histograma: los residuales tienen una distribución muy concentrada en cero con colas ligeramente pesadas, típico de datos financieros. La curva naranja confirma que se aproximan a una distribución normal, lo que valida los supuestos del modelo ARIMA.
+
+En conclusión el diagnóstico del ARIMA(3,1,2) es satisfactorio, los residuales son prácticamente ruido blanco y se distribuyen de forma aproximadamente normal. 
+
+
+Forecast
+
+```{r}
+forecast_spy <- forecast(modelo_arima, h = 40, level = c(80, 95))
+```
+
+Gráfica del forecast 
+
+```{r}
+autoplot(forecast_spy) +
+  labs(title = "Forecast SPY — Próximo Mes (40 periodos de 30 min)",
+       x = "Tiempo", y = "Precio (USD)",
+       caption = "Bandas: 80% y 95% de confianza") +
+  theme_minimal()
+```
+
+Ver valores del forecast
+
+```{r}
+cat("\n--- Valores Forecast ---\n")
+print(forecast_spy)
+```
+
+Métricas de precisión
+
+```{r}
+cat("\n--- Métricas de Precisión ---\n")
+print(accuracy(modelo_arima))
+```
+La línea negra muestra el histórico de precios de SPY desde enero 2023 hasta marzo 2026, donde se puede observar claramente la tendencia alcista que llevó el precio desde ~$635 hasta un máximo de ~$695, seguida de una corrección reciente que lo ha llevado a ~$662 al cierre del periodo analizado. Esta caída reciente coincide con el entorno de mercado actual de incertidumbre que ha afectado al S&P 500 en las últimas semanas.
+
+La zona azul al final de la gráfica representa el forecast para los próximos 40 periodos de 30 minutos (~1 mes). El modelo ARIMA(3,1,2) proyecta que SPY continuará con una ligera tendencia a la baja en el corto plazo, manteniéndose alrededor de los $660 dólares como punto central de la predicción. Las bandas de confianza al 80% y 95% son relativamente estrechas dado el horizonte corto de predicción, lo que indica que el modelo tiene buena certeza sobre el comportamiento inmediato del precio.
+
+Es importante señalar que el forecast de corto plazo en series financieras tiende a proyectar una continuación de la tendencia reciente — en este caso la corrección a la baja — por lo que el modelo sugiere cautela para nuevas posiciones en SPY en el próximo mes.
+
+
+#GARCH
+
+Instalamos los paquetes rugarch y FinTs
+
+Acción seleccionada: SPY 
+
+Esto sirve modelar y predecir la volatilidad condicional no del precio sino que tan agresivos son los movimientos de SPY. 
+
+Librerías necesarias 
+
+```{r}
+library(rugarch)
+library(tidyverse)
+library(FinTS)
+```
+
+Extraer retornos de SPY 
+
+```{r}
+spy_ret <- df_ret %>%
+  select(datetime, r_SPY) %>%
+  na.omit() %>%
+  arrange(datetime)
+```
+
+Graficar retornos 
+
+```{r}
+ggplot(spy_ret, aes(x = datetime, y = r_SPY)) +
+  geom_line(color = "steelblue", linewidth = 0.3) +
+  labs(title = "Retornos Logarítmicos SPY (30 min)",
+       x = "Fecha", y = "Retorno log") +
+  theme_minimal()
+```
+
+Test ARCH 
+
+```{r}
+cat("\n--- TEST ARCH (orden 5) ---\n")
+ArchTest(spy_ret$r_SPY, lags = 5)
+```
+
+Con Chi2= 1204.7 y p-valor < 2.2e-16 se rechaza contundentemente la hipótesis nula de "no hay efectos ARCH". Esto confirma que sí existe volatilidad agrupada en los retornos de SPY, los periodos de alta volatilidad tienden a ser seguidos por más alta volatilidad. Por tanto, este resultado es la justificación estadística perfecta para usar el modelo GARCH para modelar la volatilidad. 
+
+Especificar ARCH
+
+```{r}
+spec_garch <- ugarchspec(
+  variance.model     = list(model = "sGARCH", garchOrder = c(1,1)),
+  mean.model         = list(armaOrder = c(1,0), include.mean = TRUE),
+  distribution.model = "std"
+)
+```
+
+Ajustar modelo 
+
+```{r}
+modelo_garch <- ugarchfit(spec = spec_garch, data = spy_ret$r_SPY, solver = "hybrid")
+show(modelo_garch)
+```
+Modelo ajustado GARCH con distribución t-student 
+
+alpha1 = 0.3461 (p< 0.0001): mide el impacto de shocks recientes en la volatilidad. Este valor de 0.35 indica que los movimientos bruscos del mercado tienen un efecto significativo e inmediato sobre la volatilidad futura de SPY.
+
+beta1 = 0.6529 (p< 0.0001): mide la persistencia de la volatilidad. Un valor de 0.65 significa que la volatilidad de periodos anteriores sigue siendo relevante para explicar la volatilidad actual. 
+
+La suma alpha1 + beta1 = 0.999, muy cercana a 1, lo que indica que la volatilidad es altamente persistente — cuando el mercado se pone volátil, tarda en calmarse.
+
+Usamos la t student ya que los retornos tienen colas pesadas, ocurren eventos extremos de manera más frecuente que los que predice uns distribución normal shape = 2.643 (p< 0.0001):
+
+El modelo está especificado, puesto que todos los parámetros son significativos, los residuales son ruido blanco y no quedan efectos ARCH sin capturar. La alta persistencia de la volatilidad (alpha+beta= 0.999) es consistente con el comportamiento que conocemos del S&P 500, donde periodos de turbulencia como correcciones de mercado o eventos macroeconómicos generan volatilidad y esta es sostenida en el tiempo. 
+
+Graficar volatilidad condicional 
+
+```{r}
+spy_ret$volatilidad <- as.numeric(sigma(modelo_garch))
+spy_ret$VaR_95      <- as.numeric(quantile(modelo_garch, probs = 0.05))
+
+ggplot(spy_ret, aes(x = datetime, y = volatilidad)) +
+  geom_line(color = "firebrick", linewidth = 0.4) +
+  labs(title = "Volatilidad Condicional SPY — GARCH(1,1)",
+       x = "Fecha", y = "Volatilidad") +
+  theme_minimal()
+```
+
+La gráfica muestra la evolución de la volatilidad condicional de SPY a intervalos de 30 minutos desde agosto 2025 hasta marzo 2026. Durante la mayor parte del periodo la volatilidad se mantiene en un nivel base bajo de aproximadamente 0.001 a 0.003, con picos puntuales que coinciden con eventos de mercado relevantes que pudieran ser decisiones de la Fed, reportes de empleo o noticias macroeconómicas, entre otras. Lo más destacado de la gráfica es el pico extremo al final del periodo, el nivel más alto de toda la muestra y aproximadamente 10 veces el nivel base normal. Esto es consistente con la corrección que vimos en la gráfica de precios de SPY, donde el índice cayó significativamente en las últimas semanas. 
+
+
+Forecast de volatilidad 40 periodos
+
+```{r}
+forecast_garch <- ugarchforecast(modelo_garch, n.ahead = 40)
+show(forecast_garch)
+plot(forecast_garch, which = 3)
+```
+La línea azul es la volatilidad real de SPY que ya ocurrió mientras que la línea roja es el forecast, es decir lo que el modelo GARCH predice que va a pasar con la volatilidad desde hoy hasta principios de abril. El modelo predice que la volatilidad va a bajar gradualmente desde el pico de 0.030 y se va a estabilizar alrededor de 0.012 para las próximas semanas.
+
+VaR Dinamico 
+
+```{r}
+ggplot(spy_ret, aes(x = datetime)) +
+  geom_line(aes(y = r_SPY),  color = "steelblue", linewidth = 0.3, alpha = 0.7) +
+  geom_line(aes(y = VaR_95), color = "firebrick", linewidth = 0.6) +
+  labs(title = "SPY — Retornos vs VaR 95% Dinámico",
+       x = "Fecha", y = "Retorno log") +
+  theme_minimal()
+```
+
+La línea azul son los retornos reales de SPY cada 30 minutos esta sube y baja constantemente alrededor de cero. La línea roja es el VaR 95% dinámico, es decir la pérdida máxima esperada en cada periodo. Se dice que es dinámica porque cambia con la volatilidad del mercado.El modelo GARCH(1,1) modela y predice exitosamente tanto la volatilidad condicional como el riesgo de pérdida de SPY, esto nos sirve para identificar en tiempo real cuando el mercado entra en regímenes de alta volatilidad como el observado en marzo 2026.
+
+
+
+
