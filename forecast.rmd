@@ -1,0 +1,243 @@
+# ============================================================================
+# Forecast del ETF SPY (State Street SPDR S&P 500 ETF Trust)
+# Serie de Tiempo para el próximo mes
+# ============================================================================
+
+# Instalación de paquetes necesarios (ejecutar una sola vez)
+# install.packages(c("quantmod", "forecast", "ggplot2", "tseries", "TTR"))
+
+# Cargar librerías
+library(quantmod)
+library(forecast)
+library(ggplot2)
+library(tseries)
+library(TTR)
+
+# ============================================================================
+# 1. DESCARGA DE DATOS HISTÓRICOS
+# ============================================================================
+
+# Descargar datos del SPY de Yahoo Finance
+# Últimos 2 años de datos para mejor análisis
+getSymbols("SPY", from = "2024-03-20", to = "2026-03-20", periodicity = "daily")
+
+# Extraer el precio de cierre ajustado
+spy_prices <- Ad(SPY)  # Ad() = Adjusted Close
+spy_prices <- na.omit(spy_prices)
+
+# Convertir a serie de tiempo
+spy_ts <- ts(as.numeric(spy_prices), frequency = 252)  # 252 días hábiles por año
+
+# ============================================================================
+# 2. ANÁLISIS EXPLORATORIO DE LA SERIE
+# ============================================================================
+
+# Visualizar la serie de tiempo
+plot(spy_ts, main = "Histórico de Precios SPY (2024-2026)",
+     xlab = "Tiempo", ylab = "Precio ($)", col = "steelblue", lwd = 1.5)
+grid()
+
+# Gráfico con ggplot2 (más elegante)
+spy_df <- data.frame(
+  Date = index(spy_prices),
+  Price = as.numeric(spy_prices)
+)
+
+ggplot(spy_df, aes(x = Date, y = Price)) +
+  geom_line(color = "steelblue", size = 0.7) +
+  labs(title = "Precio del ETF SPY (2024-2026)",
+       subtitle = "State Street SPDR S&P 500 ETF Trust",
+       x = "Fecha", y = "Precio ($)") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 14))
+
+# Análisis de descomposición (tendencia, estacionalidad, ruido)
+spy_decomposed <- decompose(spy_ts, type = "multiplicative")
+plot(spy_decomposed)
+
+# Prueba de estacionariedad (Augmented Dickey-Fuller)
+cat("\n=== Prueba ADF (Augmented Dickey-Fuller) ===\n")
+adf_test <- adf.test(spy_ts)
+print(adf_test)
+
+# Si no es estacionaria, diferenciar
+if (adf_test$p.value > 0.05) {
+  cat("\nLa serie NO es estacionaria. Aplicando diferenciación...\n")
+  spy_diff <- diff(spy_ts)
+  adf_test_diff <- adf.test(spy_diff)
+  print(adf_test_diff)
+}
+
+# ============================================================================
+# 3. ANÁLISIS ACF y PACF
+# ============================================================================
+
+par(mfrow = c(2, 2))
+acf(spy_ts, main = "ACF - SPY")
+pacf(spy_ts, main = "PACF - SPY")
+acf(diff(spy_ts), main = "ACF - SPY Diferenciada")
+pacf(diff(spy_ts), main = "PACF - SPY Diferenciada")
+par(mfrow = c(1, 1))
+
+# ============================================================================
+# 4. MODELOS DE FORECASTING
+# ============================================================================
+
+# Período de pronóstico: 21 días hábiles (aproximadamente 1 mes)
+forecast_horizon <- 21
+
+# --- MÉTODO 1: Auto ARIMA ---
+cat("\n=== MÉTODO 1: Auto ARIMA ===\n")
+model_auto_arima <- auto.arima(spy_ts, seasonal = FALSE)
+print(summary(model_auto_arima))
+forecast_arima <- forecast(model_auto_arima, h = forecast_horizon)
+
+# --- MÉTODO 2: Exponential Smoothing (ETS) ---
+cat("\n=== MÉTODO 2: Exponential Smoothing (ETS) ===\n")
+model_ets <- ets(spy_ts)
+print(summary(model_ets))
+forecast_ets <- forecast(model_ets, h = forecast_horizon)
+
+# --- MÉTODO 3: Modelo de Regresión con Tendencia ---
+cat("\n=== MÉTODO 3: Regresión con Tendencia ===\n")
+time_index <- 1:length(spy_ts)
+model_lm <- lm(spy_ts ~ time_index)
+print(summary(model_lm))
+
+# Predicción con el modelo lineal
+future_time <- (length(spy_ts) + 1):(length(spy_ts) + forecast_horizon)
+forecast_lm <- predict(model_lm, newdata = data.frame(time_index = future_time),
+                       se.fit = TRUE, interval = "prediction", level = 0.95)
+
+# --- MÉTODO 4: Promedio Móvil Suavizado ---
+cat("\n=== MÉTODO 4: Suavizamiento de Holt-Winters ===\n")
+model_hw <- HoltWinters(spy_ts)
+print(summary(model_hw))
+forecast_hw <- forecast(model_hw, h = forecast_horizon)
+
+# ============================================================================
+# 5. VISUALIZACIÓN DE PRONÓSTICOS
+# ============================================================================
+
+# Gráfico ARIMA
+plot(forecast_arima, main = "Forecast SPY - ARIMA",
+     xlab = "Tiempo", ylab = "Precio ($)")
+grid()
+
+# Gráfico ETS
+plot(forecast_ets, main = "Forecast SPY - Exponential Smoothing",
+     xlab = "Tiempo", ylab = "Precio ($)")
+grid()
+
+# Gráfico Holt-Winters
+plot(forecast_hw, main = "Forecast SPY - Holt-Winters",
+     xlab = "Tiempo", ylab = "Precio ($)")
+grid()
+
+# ============================================================================
+# 6. RESUMEN DE PRONÓSTICOS
+# ============================================================================
+
+cat("\n" %+% strrep("=", 60) %+% "\n")
+cat("RESUMEN DE PRONÓSTICOS PARA EL PRÓXIMO MES (21 DÍAS HÁBILES)\n")
+cat(strrep("=", 60) %+% "\n")
+
+# Obtener el último precio
+last_price <- as.numeric(tail(spy_prices, 1))
+cat("\nÚltimo precio registrado:", round(last_price, 2), "$\n")
+
+# ARIMA
+cat("\n--- ARIMA ---\n")
+cat("Pronóstico puntual:", round(tail(forecast_arima$mean, 1), 2), "$\n")
+cat("Límite inferior (95%):", round(tail(forecast_arima$lower[, 2], 1), 2), "$\n")
+cat("Límite superior (95%):", round(tail(forecast_arima$upper[, 2], 1), 2), "$\n")
+change_arima <- ((tail(forecast_arima$mean, 1) - last_price) / last_price) * 100
+cat("Cambio esperado:", round(change_arima, 2), "%\n")
+
+# ETS
+cat("\n--- Exponential Smoothing (ETS) ---\n")
+cat("Pronóstico puntual:", round(tail(forecast_ets$mean, 1), 2), "$\n")
+cat("Límite inferior (95%):", round(tail(forecast_ets$lower[, 2], 1), 2), "$\n")
+cat("Límite superior (95%):", round(tail(forecast_ets$upper[, 2], 1), 2), "$\n")
+change_ets <- ((tail(forecast_ets$mean, 1) - last_price) / last_price) * 100
+cat("Cambio esperado:", round(change_ets, 2), "%\n")
+
+# Holt-Winters
+cat("\n--- Holt-Winters ---\n")
+cat("Pronóstico puntual:", round(tail(forecast_hw$mean, 1), 2), "$\n")
+cat("Límite inferior (95%):", round(tail(forecast_hw$lower[, 2], 1), 2), "$\n")
+cat("Límite superior (95%):", round(tail(forecast_hw$upper[, 2], 1), 2), "$\n")
+change_hw <- ((tail(forecast_hw$mean, 1) - last_price) / last_price) * 100
+cat("Cambio esperado:", round(change_hw, 2), "%\n")
+
+# ============================================================================
+# 7. EVALUACIÓN DE MODELOS (Backtest)
+# ============================================================================
+
+cat("\n" %+% strrep("=", 60) %+% "\n")
+cat("EVALUACIÓN DE MODELOS\n")
+cat(strrep("=", 60) %+% "\n")
+
+# Calcular métricas de error
+cat("\n--- Métricas ARIMA ---\n")
+cat("RMSE:", round(sqrt(mean(forecast_arima$residuals^2)), 4), "\n")
+cat("MAE:", round(mean(abs(forecast_arima$residuals)), 4), "\n")
+cat("MAPE:", round(mean(abs(forecast_arima$residuals / spy_ts)) * 100, 4), "%\n")
+
+cat("\n--- Métricas ETS ---\n")
+cat("RMSE:", round(sqrt(mean(forecast_ets$residuals^2)), 4), "\n")
+cat("MAE:", round(mean(abs(forecast_ets$residuals)), 4), "\n")
+cat("MAPE:", round(mean(abs(forecast_ets$residuals / spy_ts)) * 100, 4), "%\n")
+
+# ============================================================================
+# 8. GRÁFICO COMPARATIVO
+# ============================================================================
+
+# Crear un gráfico con todos los pronósticos
+par(mfrow = c(2, 2))
+
+plot(forecast_arima, main = "ARIMA", ylab = "Precio ($)")
+grid()
+
+plot(forecast_ets, main = "Exponential Smoothing", ylab = "Precio ($)")
+grid()
+
+plot(forecast_hw, main = "Holt-Winters", ylab = "Precio ($)")
+grid()
+
+# Gráfico de residuales ARIMA
+plot(forecast_arima$residuals, main = "Residuales ARIMA",
+     ylab = "Residual", type = "l")
+grid()
+abline(h = 0, col = "red", lty = 2)
+
+par(mfrow = c(1, 1))
+
+# ============================================================================
+# 9. CREAR TABLA DE PRONÓSTICOS
+# ============================================================================
+
+# Crear tabla con los pronósticos
+forecast_table <- data.frame(
+  Day = 1:forecast_horizon,
+  ARIMA = round(as.numeric(forecast_arima$mean), 2),
+  ETS = round(as.numeric(forecast_ets$mean), 2),
+  HoltWinters = round(as.numeric(forecast_hw$mean), 2)
+)
+
+cat("\n" %+% strrep("=", 60) %+% "\n")
+cat("TABLA DE PRONÓSTICOS - PRÓXIMO MES\n")
+cat(strrep("=", 60) %+% "\n")
+print(forecast_table)
+
+# ============================================================================
+# 10. EXPORTAR RESULTADOS
+# ============================================================================
+
+# Guardar tabla de pronósticos a CSV
+write.csv(forecast_table, "spy_forecast.csv", row.names = FALSE)
+cat("\n✓ Tabla de pronósticos guardada en 'spy_forecast.csv'\n")
+
+# Guardar la sesión
+save.image("spy_forecast_analysis.RData")
+cat("✓ Análisis completo guardado en 'spy_forecast_analysis.RData'\n")
