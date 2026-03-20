@@ -1,3 +1,4 @@
+# Se realizó un prompt que indica la instrucción para realizar una serie de tiempo que nos de el pronóstico del commportamiento para el proximo mes del ETF SPY. 
 # ============================================================================
 # Forecast del ETF SPY (State Street SPDR S&P 500 ETF Trust)
 # Serie de Tiempo para el próximo mes
